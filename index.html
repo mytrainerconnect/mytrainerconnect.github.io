@@ -6,13 +6,9 @@
   <title>MyTrainerConnect</title>
   
   <link rel="manifest" href="manifest.json">
-  
-  <!-- Iconos resolutivos para Android -->
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="favicon-512.png">
-  
-  <!-- Iconos para iOS -->
   <link rel="apple-touch-icon" href="favicon-192.png">
   <link rel="apple-touch-icon" sizes="180x180" href="favicon-192.png">
   
@@ -20,11 +16,68 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="MyTrainerConnect">
   
+  <!-- OneSignal SDK -->
+  <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" async=""></script>
+  
   <style>
     body, html, iframe { margin: 0; padding: 0; width: 100%; height: 100%; border: none; overflow: hidden; background: #0a0a1a; }
   </style>
 </head>
 <body>
-  <iframe src="https://script.google.com/macros/s/AKfycbwt-faE_6QaKB5w6Usgetm9nFVKk01m8z6C30mzARIGOqkkvQdOuqmvW0azVFMn1bDs/exec"></iframe>
+  <iframe id="appFrame" src="https://script.google.com/macros/s/AKfycbwt-faE_6QaKB5w6Usgetm9nFVKk01m8z6C30mzARIGOqkkvQdOuqmvW0azVFMn1bDs/exec"></iframe>
+  
+  <script>
+    // Inicializar OneSignal
+    window.OneSignal = window.OneSignal || [];
+    OneSignal.push(function() {
+      OneSignal.init({
+        appId: "a45fa6a3-2132-452e-abe4-da50c4f6c0ef",
+        notifyButton: { enable: true },
+      });
+    });
+    
+    // Escuchar mensajes del iframe (Apps Script)
+    window.addEventListener('message', function(event) {
+      // Verificar origen (seguridad)
+      if (event.origin !== 'https://script.google.com' && event.origin !== 'https://n-fxhj7eneg24syzy6exuem5fziqnbshdpn3tjiwi-0lu-script.googleusercontent.com') return;
+      
+      if (event.data && event.data.type === 'register-push') {
+        // El iframe nos pide registrar al cliente
+        registrarPushCliente(event.data.clienteId);
+      }
+    });
+    
+    function registrarPushCliente(clienteId) {
+      if (!clienteId) return;
+      if (window.__oneSignalRegistrado === clienteId) return;
+      
+      OneSignal.getUserId().then(function(userId) {
+        if (!userId) {
+          OneSignal.showNativePrompt().then(function() {
+            OneSignal.getUserId().then(function(newUserId) {
+              if (newUserId) {
+                window.__oneSignalRegistrado = clienteId;
+                registrarEnBackend(clienteId, newUserId);
+              }
+            });
+          }).catch(function(e) {
+            console.log('Usuario rechazó notificaciones:', e);
+          });
+        } else {
+          window.__oneSignalRegistrado = clienteId;
+          registrarEnBackend(clienteId, userId);
+        }
+      });
+    }
+    
+    function registrarEnBackend(clienteId, playerId) {
+      // Llamar al backend mediante POST a un endpoint de Apps Script
+      fetch('https://script.google.com/macros/s/AKfycbwt-faE_6QaKB5w6Usgetm9nFVKk01m8z6C30mzARIGOqkkvQdOuqmvW0azVFMn1bDs/exec?action=registrarPush&clienteId=' + encodeURIComponent(clienteId) + '&playerId=' + encodeURIComponent(playerId), {
+        method: 'POST'
+      }).catch(function(e) {
+        console.error('Error al registrar push en backend:', e);
+      });
+    }
+  </script>
 </body>
 </html>
