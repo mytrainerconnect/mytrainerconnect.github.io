@@ -26,58 +26,71 @@
 <body>
   <iframe id="appFrame" src="https://script.google.com/macros/s/AKfycbwt-faE_6QaKB5w6Usgetm9nFVKk01m8z6C30mzARIGOqkkvQdOuqmvW0azVFMn1bDs/exec"></iframe>
   
-  <script>
-    // Inicializar OneSignal
-    window.OneSignal = window.OneSignal || [];
-    OneSignal.push(function() {
-      OneSignal.init({
-        appId: "a45fa6a3-2132-452e-abe4-da50c4f6c0ef",
-        notifyButton: { enable: true },
-      });
+ <script>
+  // Inicializar OneSignal
+  window.OneSignal = window.OneSignal || [];
+  OneSignal.push(function() {
+    OneSignal.init({
+      appId: "a45fa6a3-2132-452e-abe4-da50c4f6c0ef",
+      notifyButton: { enable: false },
     });
+  });
+  
+  // Escuchar mensajes del iframe (Apps Script)
+  window.addEventListener('message', function(event) {
+    if (event.origin !== 'https://script.google.com' && 
+        event.origin !== 'https://n-fxhj7eneg24syzy6exuem5fziqnbshdpn3tjiwi-0lu-script.googleusercontent.com') return;
     
-    // Escuchar mensajes del iframe (Apps Script)
-    window.addEventListener('message', function(event) {
-      // Verificar origen (seguridad)
-      if (event.origin !== 'https://script.google.com' && event.origin !== 'https://n-fxhj7eneg24syzy6exuem5fziqnbshdpn3tjiwi-0lu-script.googleusercontent.com') return;
-      
-      if (event.data && event.data.type === 'register-push') {
-        // El iframe nos pide registrar al cliente
-        registrarPushCliente(event.data.clienteId);
-      }
-    });
+    if (event.data && event.data.type === 'register-push') {
+      registrarPushCliente(event.data.clienteId);
+    }
     
-    function registrarPushCliente(clienteId) {
-      if (!clienteId) return;
-      if (window.__oneSignalRegistrado === clienteId) return;
-      
-      OneSignal.getUserId().then(function(userId) {
-        if (!userId) {
-          OneSignal.showNativePrompt().then(function() {
-            OneSignal.getUserId().then(function(newUserId) {
-              if (newUserId) {
-                window.__oneSignalRegistrado = clienteId;
-                registrarEnBackend(clienteId, newUserId);
+    if (event.data && event.data.type === 'show-push-prompt') {
+      // El iframe pide mostrar el popup (desde un clic del usuario en el botón)
+      OneSignal.push(function() {
+        OneSignal.showNativePrompt().then(function() {
+          console.log('Popup aceptado');
+          // Después de aceptar, obtener el playerId y registrarlo
+          setTimeout(function() {
+            OneSignal.getUserId().then(function(userId) {
+              if (userId && window.__clienteIdPendiente) {
+                registrarEnBackend(window.__clienteIdPendiente, userId);
               }
             });
-          }).catch(function(e) {
-            console.log('Usuario rechazó notificaciones:', e);
-          });
-        } else {
+          }, 2000);
+        }).catch(function(e) {
+          console.error('Error prompt:', e);
+        });
+      });
+    }
+  });
+  
+  function registrarPushCliente(clienteId) {
+    if (!clienteId) return;
+    if (window.__oneSignalRegistrado === clienteId) return;
+    
+    // Guardar el clienteId por si necesitamos registrarlo después del popup
+    window.__clienteIdPendiente = clienteId;
+    
+    OneSignal.push(function() {
+      OneSignal.getUserId().then(function(userId) {
+        if (userId) {
           window.__oneSignalRegistrado = clienteId;
           registrarEnBackend(clienteId, userId);
         }
       });
-    }
-    
-    function registrarEnBackend(clienteId, playerId) {
-      // Llamar al backend mediante POST a un endpoint de Apps Script
-      fetch('https://script.google.com/macros/s/AKfycbwt-faE_6QaKB5w6Usgetm9nFVKk01m8z6C30mzARIGOqkkvQdOuqmvW0azVFMn1bDs/exec?action=registrarPush&clienteId=' + encodeURIComponent(clienteId) + '&playerId=' + encodeURIComponent(playerId), {
-        method: 'POST'
-      }).catch(function(e) {
-        console.error('Error al registrar push en backend:', e);
-      });
-    }
-  </script>
+    });
+  }
+  
+  function registrarEnBackend(clienteId, playerId) {
+    fetch('https://script.google.com/macros/s/AKfycbwt-faE_6QaKB5w6Usgetm9nFVKk01m8z6C30mzARIGOqkkvQdOuqmvW0azVFMn1bDs/exec?action=registrarPush&clienteId=' + encodeURIComponent(clienteId) + '&playerId=' + encodeURIComponent(playerId), {
+      method: 'POST'
+    }).then(function() {
+      console.log('PlayerId registrado en backend:', clienteId, playerId);
+    }).catch(function(e) {
+      console.error('Error al registrar push en backend:', e);
+    });
+  }
+</script>
 </body>
 </html>
